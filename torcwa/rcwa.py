@@ -1,8 +1,7 @@
 import warnings
 import torch
+from math import pi
 from .torch_eig import Eig
-
-pi = 3.141592652589793
 
 class rcwa:
     # Simulation setting
