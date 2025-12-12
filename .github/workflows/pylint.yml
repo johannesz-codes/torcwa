@@ -21,7 +21,7 @@ jobs:
           pip install ruff black
 
       - name: Ruff
-        run: ruff torcwa
+        run: ruff check torcwa
 
       - name: Black
         run: black --check torcwa
