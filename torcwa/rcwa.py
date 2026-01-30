@@ -1504,6 +1504,36 @@ class rcwa:
 
         return [Ex, Ey, Ez], [Hx, Hy, Hz]
 
+    def poynting(self, E, H):
+        """
+        Hint:
+        Computes the time-averaged Poynting vector for phasor fields using the
+        exp(-jωt) convention:
+            <S> = 0.5 * Re(E × H*)
+        Input E/H must be (Ex, Ey, Ez) / (Hx, Hy, Hz) on the same grid (same shape).
+        Returns (Sx, Sy, Sz) on that grid.
+        """
+        Ex, Ey, Ez = E
+        Hx, Hy, Hz = H
+        Sx = 0.5 * torch.real(Ey * Hz.conj() - Ez * Hy.conj())
+        Sy = 0.5 * torch.real(Ez * Hx.conj() - Ex * Hz.conj())
+        Sz = 0.5 * torch.real(Ex * Hy.conj() - Ey * Hx.conj())
+        return (Sx, Sy, Sz)
+
+    def poynting_xy(self, layer_num, x_axis, y_axis, z_prop=0.0):
+        """
+        Hint:
+        Convenience wrapper around field_xy(...): reconstructs E and H on an XY plane
+        inside the chosen layer at position z_prop (same convention as field_xy),
+        then calls poynting(E, H) to obtain (Sx, Sy, Sz) on the (x,y)-grid.
+        For layer absorption you usually use Sz and compare it at z_prop=0 and z_prop=thickness.
+        """
+        fields = self.field_xy(layer_num, x_axis, y_axis, z_prop)
+        if fields is None:
+            raise ValueError("field_xy returned None (invalid inputs).")
+        E, H = fields
+        return self.poynting(E, H)
+
     # Internal functions
     def _matching_indices(self, orders):
         orders[orders[:, 0] < -self.order[0], 0] = int(-self.order[0])
