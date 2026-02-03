@@ -1336,6 +1336,7 @@ class rcwa:
         - y_axis: y-direction sampling coordinates (torch.Tensor)
         - z_prop: z-direction distance from the lower boundary of the layer (layer_num>-1),
             or the distance from the upper boundary of the layer and should be negative (layer_num=-1).
+            Lower boundary (z=0) is facing input layer for layer_num>-1 positive z moves away from input.
 
         Return
         - [Ex, Ey, Ez] (list[torch.Tensor]), [Hx, Hy, Hz] (list[torch.Tensor])
@@ -1503,6 +1504,68 @@ class rcwa:
             Hz = torch.sum(Hz_mn.reshape(1, 1, -1) * xy_phase, dim=2)
 
         return [Ex, Ey, Ez], [Hx, Hy, Hz]
+
+    def poynting(self, E, H):
+        """
+        Hint:
+        Computes the time-averaged Poynting vector for phasor fields using the
+        exp(-jωt) convention:
+            <S> = 0.5 * Re(E × H*)
+        Input E/H must be (Ex, Ey, Ez) / (Hx, Hy, Hz) on the same grid (same shape).
+        Returns (Sx, Sy, Sz) on that grid.
+        """
+        Ex, Ey, Ez = E
+        Hx, Hy, Hz = H
+        Sx = 0.5 * torch.real(Ey * Hz.conj() - Ez * Hy.conj())
+        Sy = 0.5 * torch.real(Ez * Hx.conj() - Ex * Hz.conj())
+        Sz = 0.5 * torch.real(Ex * Hy.conj() - Ey * Hx.conj())
+        return (Sx, Sy, Sz)
+
+    def poynting_xy(self, layer_num, x_axis, y_axis, z_prop=0.0):
+        """
+        Hint:
+        Convenience wrapper around field_xy(...): reconstructs E and H on an XY plane
+        inside the chosen layer at position z_prop (same convention as field_xy),
+        then calls poynting(E, H) to obtain (Sx, Sy, Sz) on the (x,y)-grid.
+        For layer absorption you usually use Sz and compare it at z_prop=0 and z_prop=thickness.
+        """
+        E, H = self.field_xy(layer_num, x_axis, y_axis, z_prop)
+        return self.poynting(E, H)
+
+    def poynting_flux(self, layer_num, x_axis, y_axis, z_prop=0.0):
+        """
+        Hint:
+        Computes the Poynting flux through an XY plane inside the chosen layer.
+
+        This is a higher-level convenience wrapper that delegates to
+        ``torcwa.utils.poynting_flux``. It typically:
+            1) Reconstructs the electromagnetic fields on an (x, y) grid inside
+               ``layer_num`` at the relative position ``z_prop`` (0 at the
+               layer entrance, 1 at the layer exit), using the same conventions
+               as :meth:`field_xy`.
+            2) Evaluates the time-averaged Poynting vector on that plane.
+            3) Aggregates the result to obtain a flux / power quantity.
+
+        Parameters
+        ----------
+        layer_num : int
+            Index of the layer in which the XY plane is located.
+        x_axis, y_axis : 1D array-like
+            Sample points along the x and y directions (same convention as
+            :meth:`field_xy` and :meth:`poynting_xy`).
+        z_prop : float, optional
+            Normalized position within the layer (0 at the entrance interface,
+            1 at the exit interface). Default is 0.0.
+
+        Returns
+        -------
+        Any
+            The Poynting-flux-related quantity as defined by
+            ``torcwa.utils.poynting_flux`` (see that function for details).
+        """
+        from .utils import poynting_flux
+
+        return poynting_flux(self, layer_num, x_axis, y_axis, z_prop)
 
     # Internal functions
     def _matching_indices(self, orders):
