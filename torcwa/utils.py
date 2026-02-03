@@ -6,9 +6,9 @@ def poynting_flux(sim, layer, x_points, y_points, z_prop):
     Compute the z-component of the Poynting flux integrated over specified
     x and y grids for a given layer and z-position.
 
-    This variant of ``P`` accepts explicit x and y coordinate arrays and is
-    therefore useful when you want to integrate the Poynting flux over a
-    custom grid instead of the global ``torcwa.rcwa_geo.x``/``y`` arrays.
+    This function accepts explicit x and y coordinate arrays and is therefore
+    useful when you want to integrate the Poynting flux over a custom grid
+    instead of the global ``torcwa.rcwa_geo.x``/``y`` arrays.
 
     Parameters
     ----------
