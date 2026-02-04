@@ -4,6 +4,27 @@ from .torch_eig import Eig
 
 
 class rcwa:
+    """
+    Rigorous Coupled-Wave Analysis (RCWA) simulation engine.
+
+    Implements the Fourier Modal Method (FMM) for simulating electromagnetic
+    wave propagation through periodic structures. Supports GPU acceleration
+    and automatic differentiation for optimization.
+
+    Uses Lorentz-Heaviside units with speed of light = 1 and time harmonics
+    notation exp(-jωt).
+
+    Examples
+    --------
+    >>> import torch
+    >>> import torcwa
+    >>> sim = torcwa.rcwa(freq=1/500, order=[5, 5], L=[300, 300])
+    >>> sim.add_input_layer(eps=1.0)
+    >>> sim.set_incident_angle(inc_ang=0.0, azi_ang=0.0)
+    >>> sim.add_layer(thickness=100, eps=2.25)
+    >>> sim.solve_global_smatrix()
+    """
+
     # Simulation setting
     def __init__(
         self,
@@ -18,22 +39,29 @@ class rcwa:
         max_Pinv_instability=0.005
     ):
         """
-        Rigorous Coupled Wave Analysis
-        - Lorentz-Heaviside units
-        - Speed of light: 1
-        - Time harmonics notation: exp(-jωt)
+        Initialize Rigorous Coupled Wave Analysis (RCWA) simulation.
+
+        Uses Lorentz-Heaviside units with speed of light = 1 and
+        time harmonics notation exp(-jωt).
 
         Parameters
-        - freq: simulation frequency (unit: length^-1)
-        - order: Fourier order [x_order (int), y_order (int)]
-        - L: Lattice constant [Lx, Ly] (unit: length)
-
-        Keyword Parameters
-        - dtype: simulation data type (only torch.complex64 and torch.complex128 are allowed.)
-        - device: simulation device (only torch.device('cpu') and torch.device('cuda') are allowed.)
-        - stable_eig_grad: stabilize gradient calculation of eigendecompsition (default as True)
-        - avoid_Pinv_instability: avoid instability of P inverse (P: H to E) (default as False)
-        - max_Pinv_instability: allowed maximum instability value for P inverse (default as 0.005 if avoid_Pinv_instability is True)
+        ----------
+        freq : float or torch.Tensor
+            Simulation frequency (unit: length^-1).
+        order : list of int
+            Fourier truncation order [x_order, y_order].
+        L : list of float
+            Lattice constant [Lx, Ly] (unit: length).
+        dtype : torch.dtype, optional
+            Simulation data type (torch.complex64 or torch.complex128). Default is torch.complex64.
+        device : torch.device, optional
+            Simulation device (torch.device('cpu') or torch.device('cuda')). Default is CUDA if available, otherwise CPU.
+        stable_eig_grad : bool, optional
+            Stabilize gradient calculation of eigendecomposition. Default is True.
+        avoid_Pinv_instability : bool, optional
+            Avoid instability of P inverse (P: H to E field transformation). Default is False.
+        max_Pinv_instability : float, optional
+            Allowed maximum instability value for P inverse. Default is 0.005.
         """
 
         # Hardware
@@ -110,12 +138,17 @@ class rcwa:
 
     def add_input_layer(self, eps=1.0, mu=1.0):
         """
-        Add input layer
-        - If this function is not used, simulation will be performed under free space input layer.
+        Add input layer to the simulation.
+
+        If this function is not used, simulation will be performed under
+        free space input layer.
 
         Parameters
-        - eps: relative permittivity
-        - mu: relative permeability
+        ----------
+        eps : float or torch.Tensor, optional
+            Relative permittivity of the input layer. Default is 1.0.
+        mu : float or torch.Tensor, optional
+            Relative permeability of the input layer. Default is 1.0.
         """
 
         self.eps_in = torch.as_tensor(eps, dtype=self._dtype, device=self._device)
@@ -124,12 +157,17 @@ class rcwa:
 
     def add_output_layer(self, eps=1.0, mu=1.0):
         """
-        Add output layer
-        - If this function is not used, simulation will be performed under free space output layer.
+        Add output layer to the simulation.
+
+        If this function is not used, simulation will be performed under
+        free space output layer.
 
         Parameters
-        - eps: relative permittivity
-        - mu: relative permeability
+        ----------
+        eps : float or torch.Tensor, optional
+            Relative permittivity of the output layer. Default is 1.0.
+        mu : float or torch.Tensor, optional
+            Relative permeability of the output layer. Default is 1.0.
         """
 
         self.eps_out = torch.as_tensor(eps, dtype=self._dtype, device=self._device)
@@ -138,12 +176,17 @@ class rcwa:
 
     def set_incident_angle(self, inc_ang, azi_ang, angle_layer="input"):
         """
-        Set incident angle
+        Set incident angle for the simulation.
 
         Parameters
-        - inc_ang: incident angle (unit: radian)
-        - azi_ang: azimuthal angle (unit: radian)
-        - angle_layer: reference layer to calculate angle ('i', 'in', 'input' / 'o', 'out', 'output')
+        ----------
+        inc_ang : float or torch.Tensor
+            Incident angle (unit: radian).
+        azi_ang : float or torch.Tensor
+            Azimuthal angle (unit: radian).
+        angle_layer : str, optional
+            Reference layer to calculate angle. Options are 'i', 'in', 'input' for
+            input layer, or 'o', 'out', 'output' for output layer. Default is 'input'.
         """
 
         self.inc_ang = torch.as_tensor(inc_ang, dtype=self._dtype, device=self._device)
@@ -160,12 +203,18 @@ class rcwa:
 
     def add_layer(self, thickness, eps=1.0, mu=1.0):
         """
-        Add internal layer
+        Add an internal layer to the simulation.
 
         Parameters
-        - thickness: layer thickness (unit: length)
-        - eps: relative permittivity
-        - mu: relative permeability
+        ----------
+        thickness : float
+            Layer thickness (unit: length).
+        eps : float or torch.Tensor, optional
+            Relative permittivity of the layer. Can be a scalar for homogeneous
+            material or a tensor for inhomogeneous material. Default is 1.0.
+        mu : float or torch.Tensor, optional
+            Relative permeability of the layer. Can be a scalar for homogeneous
+            material or a tensor for inhomogeneous material. Default is 1.0.
         """
 
         is_eps_homogenous = (
@@ -205,7 +254,10 @@ class rcwa:
     # Solve simulation
     def solve_global_smatrix(self):
         """
-        Solve global S-matrix
+        Solve the global scattering matrix (S-matrix) for the entire structure.
+
+        Combines all layer scattering matrices into a global S-matrix using
+        the recursive doubling algorithm.
         """
 
         # Initialization
@@ -260,15 +312,23 @@ class rcwa:
     # Returns
     def diffraction_angle(self, orders, *, layer="output", unit="radian"):
         """
-        Diffraction angles for the selected orders
+        Calculate diffraction angles for the selected orders.
 
         Parameters
-        - orders: selected diffraction orders (Recommended shape: Nx2)
-        - layer: selected layer ('i', 'in', 'input' / 'o', 'out', 'output')
-        - unit: unit of the output angles ('r', 'rad', 'radian' / 'd', 'deg', 'degree')
+        ----------
+        orders : array-like
+            Selected diffraction orders. Recommended shape is Nx2.
+        layer : str, optional
+            Selected layer. Options are 'i', 'in', 'input' for input layer,
+            or 'o', 'out', 'output' for output layer. Default is 'output'.
+        unit : str, optional
+            Unit of the output angles. Options are 'r', 'rad', 'radian' for
+            radians, or 'd', 'deg', 'degree' for degrees. Default is 'radian'.
 
-        Return
-        - inclination angle (torch.Tensor), azimuthal angle (torch.Tensor)
+        Returns
+        -------
+        tuple of torch.Tensor
+            (inclination_angle, azimuthal_angle) for each order.
         """
 
         orders = torch.as_tensor(
@@ -310,16 +370,24 @@ class rcwa:
 
     def return_layer(self, layer_num, nx=100, ny=100):
         """
-        Return spatial distributions of eps and mu for the selected layer.
-        The eps and mu are recovered from the trucated Fourier orders.
+        Return spatial distributions of permittivity and permeability for the selected layer.
+
+        The permittivity and permeability are recovered from the truncated Fourier orders
+        using inverse Fourier transform.
 
         Parameters
-        - layer_num: selected layer (int)
-        - nx: x-direction grid number (int)
-        - ny: y-direction grid number (int)
+        ----------
+        layer_num : int
+            Selected layer index.
+        nx : int, optional
+            Number of grid points in x-direction. Default is 100.
+        ny : int, optional
+            Number of grid points in y-direction. Default is 100.
 
-        Return
-        - eps_recover (torch.Tensor), mu_recover (torch.Tensor)
+        Returns
+        -------
+        tuple of torch.Tensor
+            (eps_recover, mu_recover) containing the recovered permittivity and permeability distributions.
         """
 
         eps_fft = torch.zeros([nx, ny], dtype=self._dtype, device=self._device)
@@ -372,20 +440,35 @@ class rcwa:
         evanscent=1e-3
     ):
         """
-        Return S-parameters.
+        Calculate S-parameters for specified orders and polarizations.
 
         Parameters
-        - orders: selected orders (Recommended shape: Nx2)
+        ----------
+        orders : array-like
+            Selected diffraction orders. Recommended shape is Nx2.
+        direction : str, optional
+            Direction of light propagation. Options are 'f' or 'forward', 'b' or 'backward'.
+            Default is 'forward'.
+        port : str, optional
+            Port specification. Options are 't' or 'transmission', 'r' or 'reflection'.
+            Default is 'transmission'.
+        polarization : str, optional
+            Input and output polarization. For xy-polarization: 'xx', 'yx', 'xy', 'yy'.
+            For ps-polarization: 'pp', 'sp', 'ps', 'ss'. Default is 'xx'.
+        ref_order : array-like, optional
+            Reference order for calculating S-parameters. Recommended shape is 1x2 or Nx2.
+            Default is [0, 0].
+        power_norm : bool, optional
+            If True, the absolute square of S-parameters corresponds to the ratio of power.
+            Default is True.
+        evanscent : float, optional
+            Criteria for judging the evanescent field. If power_norm=True and
+            real(kz_norm)/imag(kz_norm) < evanescent, function returns 0. Default is 1e-3.
 
-        - direction: set the direction of light propagation ('f', 'forward' / 'b', 'backward')
-        - port: set the direction of light propagation ('t', 'transmission' / 'r', 'reflection')
-        - polarization: set the input and output polarization of light ((output,input) xy-pol: 'xx' / 'yx' / 'xy' / 'yy' , ps-pol: 'pp' / 'sp' / 'ps' / 'ss' )
-        - ref_order: set the reference for calculating S-parameters (Recommended shape: Nx2)
-        - power_norm: if set as True, the absolute square of S-parameters are corresponds to the ratio of power
-        - evanescent: Criteria for judging the evanescent field. If power_norm=True and real(kz_norm)/imag(kz_norm) < evanscent, function returns 0 (default = 1e-3)
-
-        Return
-        - S-parameters (torch.Tensor)
+        Returns
+        -------
+        torch.Tensor
+            S-parameters for the specified orders and polarizations.
         """
 
         orders = torch.as_tensor(
@@ -763,13 +846,21 @@ class rcwa:
         self, *, amplitude=[1.0, 0.0], direction="forward", notation="xy"
     ):
         """
-        Generate planewave
+        Generate a plane wave source.
 
-        Paramters
-        - amplitude: amplitudes at the matched diffraction orders ([Ex_amp, Ey_amp] for 'xy' notation, [Ep_amp, Es_amp] for 'ps' notation)
-          (list / np.ndarray / torch.Tensor) (Recommended shape: 1x2)
-        - direction: incident direction ('f', 'forward' / 'b', 'backward')
-        - notation: amplitude notation (xy-pol: 'xy' / ps-pol: 'ps')
+        Parameters
+        ----------
+        amplitude : list or array-like, optional
+            Amplitudes at the matched diffraction orders.
+            For 'xy' notation: [Ex_amp, Ey_amp].
+            For 'ps' notation: [Ep_amp, Es_amp].
+            Recommended shape is 1x2. Default is [1.0, 0.0].
+        direction : str, optional
+            Incident direction. Options are 'f' or 'forward', 'b' or 'backward'.
+            Default is 'forward'.
+        notation : str, optional
+            Amplitude notation. Options are 'xy' for xy-polarization,
+            'ps' for ps-polarization. Default is 'xy'.
         """
 
         self.source_fourier(
@@ -778,14 +869,22 @@ class rcwa:
 
     def source_fourier(self, *, amplitude, orders, direction="forward", notation="xy"):
         """
-        Generate Fourier source
+        Generate a Fourier source with multiple orders.
 
-        Paramters
-        - amplitude: amplitudes at the matched diffraction orders [([Ex_amp, Ey_amp] at orders[0]), ..., ...]
-            (list / np.ndarray / torch.Tensor) (Recommended shape: Nx2)
-        - orders: diffraction orders (list / np.ndarray / torch.Tensor) (Recommended shape: Nx2)
-        - direction: incident direction ('f', 'forward' / 'b', 'backward')
-        - notation: amplitude notation (xy-pol: 'xy' / ps-pol: 'ps')
+        Parameters
+        ----------
+        amplitude : array-like
+            Amplitudes at the matched diffraction orders.
+            Format: [([Ex_amp, Ey_amp] at orders[0]), ([Ex_amp, Ey_amp] at orders[1]), ...].
+            Recommended shape is Nx2.
+        orders : array-like
+            Diffraction orders corresponding to each amplitude. Recommended shape is Nx2.
+        direction : str, optional
+            Incident direction. Options are 'f' or 'forward', 'b' or 'backward'.
+            Default is 'forward'.
+        notation : str, optional
+            Amplitude notation. Options are 'xy' for xy-polarization,
+            'ps' for ps-polarization. Default is 'xy'.
         """
         amplitude = torch.as_tensor(
             amplitude, dtype=self._dtype, device=self._device
@@ -855,16 +954,23 @@ class rcwa:
 
     def field_xz(self, x_axis, z_axis, y):
         """
-        XZ-plane field distribution.
-        Returns the field at the specific y point.
+        Calculate XZ-plane electromagnetic field distribution.
 
-        Paramters
-        - x_axis: x-direction sampling coordinates (torch.Tensor)
-        - z_axis: z-direction sampling coordinates (torch.Tensor)
-        - y: selected y point
+        Returns the electric and magnetic field components at the specified y position.
 
-        Return
-        - [Ex, Ey, Ez] (list[torch.Tensor]), [Hx, Hy, Hz] (list[torch.Tensor])
+        Parameters
+        ----------
+        x_axis : torch.Tensor
+            x-direction sampling coordinates.
+        z_axis : torch.Tensor
+            z-direction sampling coordinates.
+        y : float
+            Selected y coordinate position.
+
+        Returns
+        -------
+        tuple
+            ([Ex, Ey, Ez], [Hx, Hy, Hz]) where each component is a torch.Tensor.
         """
 
         if not isinstance(x_axis, torch.Tensor) or not isinstance(z_axis, torch.Tensor):
@@ -1089,16 +1195,23 @@ class rcwa:
 
     def field_yz(self, y_axis, z_axis, x):
         """
-        YZ-plane field distribution.
-        Returns the field at the specific x point.
+        Calculate YZ-plane electromagnetic field distribution.
+
+        Returns the electric and magnetic field components at the specified x position.
 
         Parameters
-        - y_axis: y-direction sampling coordinates (torch.Tensor)
-        - z_axis: z-direction sampling coordinates (torch.Tensor)
-        - x: selected x point
+        ----------
+        y_axis : torch.Tensor
+            y-direction sampling coordinates.
+        z_axis : torch.Tensor
+            z-direction sampling coordinates.
+        x : float
+            Selected x coordinate position.
 
-        Return
-        - [Ex, Ey, Ez] (list[torch.Tensor]), [Hx, Hy, Hz] (list[torch.Tensor])
+        Returns
+        -------
+        tuple
+            ([Ex, Ey, Ez], [Hx, Hy, Hz]) where each component is a torch.Tensor.
         """
 
         if not isinstance(y_axis, torch.Tensor) or not isinstance(z_axis, torch.Tensor):
@@ -1326,20 +1439,31 @@ class rcwa:
 
     def field_xy(self, layer_num, x_axis, y_axis, z_prop=0.0):
         """
-        XY-plane field distribution at the selected layer.
-        Returns the field at z_prop away from the lower boundary of the layer.
-        For the input layer, z_prop is the distance from the upper boundary and should be negative (calculate z_prop=0 if positive value is entered).
+        Calculate XY-plane electromagnetic field distribution at a selected layer.
+
+        Returns the field at z_prop distance from the lower boundary of the layer.
+        For the input layer (layer_num=-1), z_prop is the distance from the upper
+        boundary and should be negative. If positive value is entered for input layer,
+        z_prop=0 is used.
 
         Parameters
-        - layer_num: selected layer (int)
-        - x_axis: x-direction sampling coordinates (torch.Tensor)
-        - y_axis: y-direction sampling coordinates (torch.Tensor)
-        - z_prop: z-direction distance from the lower boundary of the layer (layer_num>-1),
-            or the distance from the upper boundary of the layer and should be negative (layer_num=-1).
-            Lower boundary (z=0) is facing input layer for layer_num>-1 positive z moves away from input.
+        ----------
+        layer_num : int
+            Selected layer index. Use -1 for input layer.
+        x_axis : torch.Tensor
+            x-direction sampling coordinates.
+        y_axis : torch.Tensor
+            y-direction sampling coordinates.
+        z_prop : float, optional
+            z-direction distance from the lower boundary of the layer (for layer_num>-1),
+            or distance from the upper boundary (should be negative for layer_num=-1).
+            For layer_num>-1, lower boundary (z=0) faces input layer and positive z
+            moves away from input. Default is 0.0.
 
-        Return
-        - [Ex, Ey, Ez] (list[torch.Tensor]), [Hx, Hy, Hz] (list[torch.Tensor])
+        Returns
+        -------
+        tuple
+            ([Ex, Ey, Ez], [Hx, Hy, Hz]) where each component is a torch.Tensor.
         """
 
         if not isinstance(layer_num, int):
@@ -1507,12 +1631,21 @@ class rcwa:
 
     def poynting(self, E, H):
         """
-        Hint:
-        Computes the time-averaged Poynting vector for phasor fields using the
-        exp(-jωt) convention:
-            <S> = 0.5 * Re(E × H*)
-        Input E/H must be (Ex, Ey, Ez) / (Hx, Hy, Hz) on the same grid (same shape).
-        Returns (Sx, Sy, Sz) on that grid.
+        Compute the time-averaged Poynting vector for phasor fields.
+
+        Uses the exp(-jωt) convention: <S> = 0.5 * Re(E × H*).
+
+        Parameters
+        ----------
+        E : tuple of torch.Tensor
+            Electric field components (Ex, Ey, Ez) on the same grid.
+        H : tuple of torch.Tensor
+            Magnetic field components (Hx, Hy, Hz) on the same grid with same shape as E.
+
+        Returns
+        -------
+        tuple of torch.Tensor
+            (Sx, Sy, Sz) Poynting vector components on the grid.
         """
         Ex, Ey, Ez = E
         Hx, Hy, Hz = H
@@ -1523,11 +1656,27 @@ class rcwa:
 
     def poynting_xy(self, layer_num, x_axis, y_axis, z_prop=0.0):
         """
-        Hint:
-        Convenience wrapper around field_xy(...): reconstructs E and H on an XY plane
-        inside the chosen layer at position z_prop (same convention as field_xy),
-        then calls poynting(E, H) to obtain (Sx, Sy, Sz) on the (x,y)-grid.
-        For layer absorption you usually use Sz and compare it at z_prop=0 and z_prop=thickness.
+        Compute the Poynting vector on an XY plane inside a chosen layer.
+
+        Convenience wrapper around field_xy that reconstructs E and H fields
+        on an XY plane, then computes the Poynting vector. For layer absorption
+        analysis, Sz is typically used by comparing values at z_prop=0 and z_prop=thickness.
+
+        Parameters
+        ----------
+        layer_num : int
+            Selected layer index. Use -1 for input layer.
+        x_axis : torch.Tensor
+            x-direction sampling coordinates.
+        y_axis : torch.Tensor
+            y-direction sampling coordinates.
+        z_prop : float, optional
+            z-direction distance from layer boundary (same convention as field_xy). Default is 0.0.
+
+        Returns
+        -------
+        tuple of torch.Tensor
+            (Sx, Sy, Sz) Poynting vector components on the (x, y) grid.
         """
         E, H = self.field_xy(layer_num, x_axis, y_axis, z_prop)
         return self.poynting(E, H)

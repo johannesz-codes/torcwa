@@ -4,8 +4,38 @@ from scipy.interpolate import interp1d
 
 
 class _MaterialFn(torch.autograd.Function):
+    """
+    Custom PyTorch autograd function for material refractive index interpolation.
+
+    Implements forward and backward passes for differentiable material property
+    evaluation with finite-difference gradient computation.
+    """
+
     @staticmethod
     def forward(ctx, wavelength, nk_data, n_interp, k_interp, dl=0.005) -> torch.Tensor:
+        """
+        Forward pass: interpolate material refractive index at given wavelength.
+
+        Parameters
+        ----------
+        ctx : context object
+            PyTorch context for saving variables for backward pass.
+        wavelength : torch.Tensor
+            Wavelength at which to evaluate the refractive index.
+        nk_data : numpy.ndarray
+            Array of wavelength, n, k data points.
+        n_interp : callable
+            Interpolation function for real part of refractive index.
+        k_interp : callable
+            Interpolation function for imaginary part of refractive index.
+        dl : float, optional
+            Wavelength step for finite-difference gradient computation. Default is 0.005.
+
+        Returns
+        -------
+        torch.Tensor
+            Complex refractive index (n + ik) at the given wavelength.
+        """
         wavelength_np = wavelength.detach().cpu().numpy()
 
         if wavelength_np < nk_data[0, 0]:
@@ -50,11 +80,57 @@ class _MaterialFn(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):  # type: ignore
+        """
+        Backward pass: compute gradient with respect to wavelength.
+
+        Parameters
+        ----------
+        ctx : context object
+            PyTorch context containing saved variables from forward pass.
+        grad_output : torch.Tensor
+            Gradient of the loss with respect to the output.
+
+        Returns
+        -------
+        tuple
+            Gradients with respect to inputs (grad_wavelength, None, None, None, None).
+        """
         grad = 2 * torch.real(torch.conj(grad_output) * ctx.dnk_dl)
         return grad, None, None, None, None
 
 
 class Material:
+    """
+    Material refractive index interpolator with automatic differentiation support.
+
+    Loads material optical properties (n, k) from a data file and provides
+    wavelength-dependent refractive index with gradient computation support.
+
+    Parameters
+    ----------
+    nk_file : str
+        Path to file containing wavelength-dependent refractive index data.
+        File format: each line contains wavelength, n, k (3 columns) or
+        index, wavelength, n, k (4 columns).
+    dl : float, optional
+        Wavelength step for finite-difference gradient computation. Default is 0.005.
+    *args
+        Additional positional arguments (currently unused).
+    **kwargs
+        Additional keyword arguments (currently unused).
+
+    Attributes
+    ----------
+    nk_data : numpy.ndarray
+        Array of wavelength, n, k data points.
+    n_interp : scipy.interpolate.interp1d
+        Cubic interpolation function for real part of refractive index.
+    k_interp : scipy.interpolate.interp1d
+        Cubic interpolation function for imaginary part of refractive index.
+    dl : float
+        Wavelength step for gradient computation.
+    """
+
     def __init__(self, nk_file, dl=0.005, *args, **kwargs):
         f_nk = open(nk_file)
         data = f_nk.readlines()
@@ -83,6 +159,22 @@ class Material:
         self.dl = dl
 
     def apply(self, wavelength, dl=None) -> torch.Tensor:
+        """
+        Evaluate material refractive index at specified wavelength.
+
+        Parameters
+        ----------
+        wavelength : float or torch.Tensor
+            Wavelength at which to evaluate the refractive index.
+        dl : float, optional
+            Wavelength step for finite-difference gradient computation.
+            If None, uses the value set during initialization. Default is None.
+
+        Returns
+        -------
+        torch.Tensor
+            Complex refractive index (n + ik) at the given wavelength.
+        """
         if dl is None:
             dl = self.dl
 
