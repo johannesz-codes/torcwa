@@ -36,7 +36,7 @@ class rcwa:
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         stable_eig_grad=True,
         avoid_Pinv_instability=False,
-        max_Pinv_instability=0.005
+        max_Pinv_instability=0.005,
     ):
         """
         Initialize Rigorous Coupled Wave Analysis (RCWA) simulation.
@@ -437,7 +437,7 @@ class rcwa:
         polarization="xx",
         ref_order=[0, 0],
         power_norm=True,
-        evanscent=1e-3
+        evanscent=1e-3,
     ):
         """
         Calculate S-parameters for specified orders and polarizations.
