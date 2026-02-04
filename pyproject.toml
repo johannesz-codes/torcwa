@@ -12,6 +12,8 @@ license = { text = "LGPL-3.0-or-later" }
 authors = [{ name = "Johannes Zeiser" }]
 dependencies = [
   "torch>=2.0",
+  "numpy",
+  "scipy",
 ]
 
 [project.urls]
