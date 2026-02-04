@@ -3,6 +3,13 @@ import torch.fft
 
 
 class geometry:
+    """
+    Geometry configuration for RCWA simulations.
+
+    Provides methods for creating and manipulating 2D geometric shapes on a grid,
+    including circles, ellipses, rectangles, and boolean operations.
+    """
+
     def __init__(
         self,
         Lx: float = 1.0,
@@ -372,6 +379,31 @@ class geometry:
 
 
 class rcwa_geo:
+    """
+    Legacy class-based geometry configuration for RCWA simulations.
+
+    Uses class variables and class methods for geometry generation.
+    This class is deprecated and will be removed in a future version.
+    Use the `geometry` class instead for new code.
+
+    Class Attributes
+    ----------------
+    edge_sharpness : float
+        Sharpness of geometry edges. Default is 100.0.
+    Lx : float
+        x-direction lattice constant. Default is 1.0.
+    Ly : float
+        y-direction lattice constant. Default is 1.0.
+    nx : int
+        x-axis sampling number. Default is 100.
+    ny : int
+        y-axis sampling number. Default is 100.
+    dtype : torch.dtype
+        Data type for geometry operations. Default is torch.float32.
+    device : torch.device
+        Device for geometry operations. Default is CUDA if available, otherwise CPU.
+    """
+
     edge_sharpness = 100.0  # sharpness of edge
     Lx = 1.0  # x-direction Lattice constant
     Ly = 1.0  # y-direction Lattice constant

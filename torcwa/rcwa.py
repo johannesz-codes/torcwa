@@ -4,6 +4,27 @@ from .torch_eig import Eig
 
 
 class rcwa:
+    """
+    Rigorous Coupled-Wave Analysis (RCWA) simulation engine.
+
+    Implements the Fourier Modal Method (FMM) for simulating electromagnetic
+    wave propagation through periodic structures. Supports GPU acceleration
+    and automatic differentiation for optimization.
+
+    Uses Lorentz-Heaviside units with speed of light = 1 and time harmonics
+    notation exp(-jωt).
+
+    Examples
+    --------
+    >>> import torch
+    >>> import torcwa
+    >>> sim = torcwa.rcwa(freq=1/500, order=[5, 5], L=[300, 300])
+    >>> sim.add_input_layer(eps=1.0)
+    >>> sim.set_incident_angle(inc_ang=0.0, azi_ang=0.0)
+    >>> sim.add_layer(thickness=100, eps=2.25)
+    >>> sim.solve_global_smatrix()
+    """
+
     # Simulation setting
     def __init__(
         self,
